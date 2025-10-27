@@ -1,4 +1,5 @@
 // frontend/src/data/songs.js
+
 // LƯU Ý: Đường dẫn require phải chính xác từ file AudioContext.js đến file MP3
 // Nếu AudioContext.js nằm trong src/context/, đường dẫn sẽ là '../../assets/audio/...'
 
@@ -8,8 +9,11 @@ const MOCK_SONGS = [
     title: 'Bước Qua Nhau',
     artist: 'Vũ.',
     imageUrl: require('../../assets/images/buocquanhau.jpg'),
-    // Đường dẫn này là tương đối TỪ FILE AUDIO CONTEXT (src/context/AudioContext.js)
     trackUrl: require('../../assets/audio/BuocQuaNhau.mp3'),
+    // --- BỔ SUNG FR-6.4 ---
+    album: '25',
+    genre: 'Indie Pop',
+    // --- KẾT THÚC BỔ SUNG ---
     lyrics: `
 [00:15.65] Hôm nay sao tôi thấy cô đơn lạ thường
 [00:19.40] Từng dòng người vội đi trên phố đông
@@ -65,6 +69,10 @@ const MOCK_SONGS = [
     artist: 'Hà Anh Tuấn',
     imageUrl: require('../../assets/images/thangmayemnhoanh.jpg'),
     trackUrl: require('../../assets/audio/ThangMayEmNhoAnh.mp3'),
+    // --- BỔ SUNG FR-6.4 ---
+    album: 'CITOPIA',
+    genre: 'Pop',
+    // --- KẾT THÚC BỔ SUNG ---
     lyrics: `
 [00:09.95] Tháng mấy mưa rơi nhiều hơn?
 [00:14.61] Ánh mắt anh trông chờ hơn
@@ -88,7 +96,7 @@ const MOCK_SONGS = [
 [01:41.35] Trái đất kia vẫn xoay
 [01:46.06] Anh vẫn nơi đây
 [01:50.80] Chờ em...
-` // (Giữ lời bài hát ngắn gọn làm ví dụ)
+`
   },
   {
     id: '3',
@@ -96,6 +104,10 @@ const MOCK_SONGS = [
     artist: 'Hoàng Dũng',
     imageUrl: require('../../assets/images/nangtho.jpg'),
     trackUrl: require('../../assets/audio/NangTho.mp3'),
+    // --- BỔ SUNG FR-6.4 ---
+    album: 'Nàng Thơ (Single)',
+    genre: 'Pop Ballad',
+    // --- KẾT THÚC BỔ SUNG ---
     lyrics: `
 [00:11.75] Em ngày em đánh rơi nụ cười vào anh
 [00:17.52] Có nghĩ sau này em sẽ chờ
@@ -117,7 +129,7 @@ const MOCK_SONGS = [
 [01:42.36] Bỗng nhiên em lại hóa thành Nàng Thơ
 [01:48.07] Để giờ anh ngẩn ngơ
 [01:50.88] Làm thơ tình theo gió mây
-` // (Giữ lời bài hát ngắn gọn làm ví dụ)
+`
   },
 ];
 

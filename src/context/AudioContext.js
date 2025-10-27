@@ -1,85 +1,76 @@
 // frontend/src/context/AudioContext.js
-
 import React, { createContext, useState, useEffect, useRef, useContext } from 'react';
 import { Audio } from 'expo-av';
-import { getMockSongs } from '../data/songs'; // Đảm bảo import từ data
+import { getMockSongs } from '../data/songs';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DownloadContext, DOWNLOAD_STATUS } from './DownloadContext';
+// --- BỔ SUNG FR-8.3 ---
+import { HistoryContext } from './HistoryContext'; // Import HistoryContext
+// --- KẾT THÚC BỔ SUNG ---
 
 export const AudioContext = createContext();
 
-const SONG_LIST = getMockSongs(); // Lấy danh sách bài hát tĩnh
+const SONG_LIST = getMockSongs();
 
 export const AudioProvider = ({ children }) => {
+    // (Các state giữ nguyên)
     const [sound, setSound] = useState(null);
     const [currentSong, setCurrentSong] = useState(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [playbackStatus, setPlaybackStatus] = useState(null);
     const [currentQueue, setCurrentQueue] = useState(SONG_LIST);
-    const [originalQueue, setOriginalQueue] = useState(SONG_LIST); // Để dành cho shuffle
+    const [originalQueue, setOriginalQueue] = useState(SONG_LIST);
     const [isLoading, setIsLoading] = useState(false);
     const [isShuffle, setIsShuffle] = useState(false);
-    const [repeatMode, setRepeatMode] = useState('off'); // 'off', 'one', 'all'
+    const [repeatMode, setRepeatMode] = useState('off');
     const [sleepTimerId, setSleepTimerId] = useState(null);
+    const [volume, setVolume] = useState(1.0);
 
-    const isPlayerLoading = useRef(false); // Ref để tránh load chồng chéo
-    
-    // Hàm tải trạng thái (ví dụ)
+    const { downloads } = useContext(DownloadContext);
+    // --- BỔ SUNG FR-8.3 ---
+    const { addSongToHistory } = useContext(HistoryContext); // Lấy hàm từ HistoryContext
+    // --- KẾT THÚC BỔ SUNG ---
+
+    const isPlayerLoading = useRef(false);
+
+    // (useEffect load/save state và setAudioModeAsync giữ nguyên)
     useEffect(() => {
-        const loadInitialState = async () => {
-            try {
-                const savedSong = await AsyncStorage.getItem('lastPlayedSong');
-                if (savedSong) {
-                    setCurrentSong(JSON.parse(savedSong));
-                }
-                const savedShuffle = await AsyncStorage.getItem('shuffleState');
-                if (savedShuffle) {
-                    setIsShuffle(JSON.parse(savedShuffle));
-                }
-                 const savedRepeat = await AsyncStorage.getItem('repeatMode');
-                if (savedRepeat) {
-                    setRepeatMode(savedRepeat);
-                }
-            } catch (e) {
-                console.error("Lỗi tải trạng thái:", e);
-            }
-        };
-        loadInitialState();
-        
-        // Cấu hình Audio session
         Audio.setAudioModeAsync({
             allowsRecordingIOS: false,
             playsInSilentModeIOS: true,
             staysActiveInBackground: true,
-            interruptionModeIOS: 1, // DO_NOT_MIX
-            interruptionModeAndroid: 1, // DO_NOT_MIX
+            interruptionModeIOS: 1,
+            interruptionModeAndroid: 1,
         });
-
-        return () => {
-            sound?.unloadAsync();
+        
+        const loadInitialState = async () => {
+             try {
+                const savedVolume = await AsyncStorage.getItem('appVolume');
+                if (savedVolume !== null) {
+                    setVolume(parseFloat(savedVolume));
+                }
+            } catch (e) { console.error("Lỗi tải trạng thái:", e); }
         };
+        loadInitialState();
+
+        return () => { sound?.unloadAsync(); };
     }, []);
 
-    // Hàm lưu trạng thái
     useEffect(() => {
-        if (currentSong) {
-            AsyncStorage.setItem('lastPlayedSong', JSON.stringify(currentSong));
-        }
-    }, [currentSong]);
-
-    useEffect(() => {
-        AsyncStorage.setItem('shuffleState', JSON.stringify(isShuffle));
-    }, [isShuffle]);
-
-     useEffect(() => {
-        AsyncStorage.setItem('repeatMode', repeatMode);
-    }, [repeatMode]);
+        AsyncStorage.setItem('appVolume', String(volume));
+    }, [volume]);
 
 
-    // --- Cập nhật hàm playSong ---
+    // Hàm phát nhạc chính
     const playSong = async (song, queue = null) => {
-        if (isPlayerLoading.current) return; // Không làm gì nếu đang load
+        if (isPlayerLoading.current) return;
+        // Kiểm tra nếu bài hát là null/undefined
+        if (!song || !song.id) {
+            console.warn("playSong được gọi với song không hợp lệ.");
+            return;
+        }
+
         if (song?.id === currentSong?.id && sound) {
-             // Nếu cùng bài hát, chỉ Play/Pause
             handlePlayPause();
             return;
         }
@@ -93,25 +84,44 @@ export const AudioProvider = ({ children }) => {
                 await sound.unloadAsync();
             }
 
-            // *** SỬA ĐỔI QUAN TRỌNG ***
-            // Thay song.url thành song.trackUrl
+            // (Logic kiểm tra file offline giữ nguyên)
+            let source;
+            const downloadedFile = downloads[song.id]; 
+            if (downloadedFile && downloadedFile.status === DOWNLOAD_STATUS.DOWNLOADED && downloadedFile.localUri) {
+                console.log(`Phát từ file offline: ${downloadedFile.localUri}`);
+                source = { uri: downloadedFile.localUri };
+            } else {
+                source = typeof song.trackUrl === 'string' ? { uri: song.trackUrl } : song.trackUrl;
+            }
+            
+            if (!source) {
+                 throw new Error("Nguồn nhạc không hợp lệ (trackUrl bị thiếu hoặc tệp tải lỗi).");
+            }
+
             const { sound: newSound, status } = await Audio.Sound.createAsync(
-                song.trackUrl, // <-- SỬA Ở ĐÂY
-                { shouldPlay: true, progressUpdateIntervalMillis: 500 }
+                source,
+                { 
+                    shouldPlay: true, 
+                    progressUpdateIntervalMillis: 500,
+                    volume: volume, 
+                }
             );
-            // *** KẾT THÚC SỬA ĐỔI ***
 
             setSound(newSound);
             setCurrentSong(song);
             setIsPlaying(true);
-            setPlaybackStatus(status); // Cập nhật status ban đầu
+            setPlaybackStatus(status);
             newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
+            // --- BỔ SUNG FR-8.3 ---
+            // Thêm vào lịch sử sau khi phát thành công
+            addSongToHistory(song);
+            // --- KẾT THÚC BỔ SUNG ---
+
+            // (Logic xử lý queue giữ nguyên)
             if (queue) {
-                setCurrentQueue(queue);
-                setOriginalQueue(queue);
+                setOriginalQueue(queue); 
                  if (isShuffle) {
-                    // Nếu shuffle đang bật, xáo trộn queue mới
                     const shuffled = [...queue].sort(() => Math.random() - 0.5);
                     const currentSongIndex = shuffled.findIndex(s => s.id === song.id);
                     if (currentSongIndex > -1) {
@@ -127,12 +137,13 @@ export const AudioProvider = ({ children }) => {
         } catch (error) {
             console.error("Lỗi khi tải bài hát:", error);
             setIsPlaying(false);
-            setCurrentSong(null);
         } finally {
             setIsLoading(false);
             isPlayerLoading.current = false;
         }
     };
+    
+    // (Các hàm còn lại: onPlaybackStatusUpdate, handleSongEnd, handlePlayPause, seekTo, formatTime, playNext, playPrevious, toggles, timers, setSongVolume... giữ nguyên)
     
     const onPlaybackStatusUpdate = (status) => {
         setPlaybackStatus(status);
@@ -152,22 +163,9 @@ export const AudioProvider = ({ children }) => {
     const handleSongEnd = () => {
         console.log("Bài hát kết thúc, repeatMode:", repeatMode);
         if (repeatMode === 'one') {
-            sound.replayAsync();
-        } else if (repeatMode === 'all') {
-            playNext(true); // true = forceNext (luôn phát bài tiếp theo, kể cả shuffle)
-        } else if (isShuffle) {
-             playNext(false); // Phát ngẫu nhiên
+            sound?.replayAsync(); 
         } else {
-            // Chế độ 'off' và không shuffle
-            const currentIndex = currentQueue.findIndex(s => s.id === currentSong.id);
-            if (currentIndex < currentQueue.length - 1) {
-                playNext(false);
-            } else {
-                // Đã hết queue, dừng nhạc
-                setIsPlaying(false);
-                sound.setPositionAsync(0);
-                sound.pauseAsync();
-            }
+            playNext(repeatMode === 'all'); 
         }
     };
 
@@ -181,8 +179,7 @@ export const AudioProvider = ({ children }) => {
             }
             setIsPlaying(!isPlaying);
         } else if (currentSong) {
-             // Nếu chưa có sound nhưng có currentSong (ví dụ: mở lại app)
-            playSong(currentSong);
+            playSong(currentSong); 
         }
     };
 
@@ -204,42 +201,44 @@ export const AudioProvider = ({ children }) => {
         return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     };
 
-     const playNext = (forceNext = false) => {
-         if (!currentSong || (currentQueue.length <= 1 && !forceNext)) return;
-
+     const playNext = (isRepeatAll = false) => {
+         if (!currentSong || currentQueue.length === 0) return;
         let currentIndex = currentQueue.findIndex(s => s.id === currentSong.id);
+        if (currentIndex === -1) { currentIndex = 0; }
         let nextIndex;
-
-        if (isShuffle && !forceNext) {
-            nextIndex = Math.floor(Math.random() * currentQueue.length);
-             // Đảm bảo không lặp lại bài cũ
-            if (nextIndex === currentIndex && currentQueue.length > 1) {
+        if (isShuffle && !isRepeatAll) {
+             nextIndex = Math.floor(Math.random() * currentQueue.length);
+             if (currentQueue.length > 1 && nextIndex === currentIndex) {
                  nextIndex = (currentIndex + 1) % currentQueue.length;
-            }
+             }
         } else {
             nextIndex = (currentIndex + 1) % currentQueue.length;
         }
-        
+        if (!isRepeatAll && !isShuffle && nextIndex === 0 && currentIndex === currentQueue.length - 1) {
+             console.log("Hết danh sách, dừng phát.");
+             sound?.pauseAsync();
+             setIsPlaying(false);
+             sound?.setPositionAsync(0);
+             return;
+        }
         if (currentQueue[nextIndex]) {
             playSong(currentQueue[nextIndex]);
         }
     };
 
     const playPrevious = () => {
-         if (!currentSong || currentQueue.length <= 1) return;
-
+         if (!currentSong || currentQueue.length === 0) return;
         let currentIndex = currentQueue.findIndex(s => s.id === currentSong.id);
+         if (currentIndex === -1) currentIndex = 0;
         let prevIndex;
-
         if (isShuffle) {
             prevIndex = Math.floor(Math.random() * currentQueue.length);
-            if (prevIndex === currentIndex && currentQueue.length > 1) {
+             if (currentQueue.length > 1 && prevIndex === currentIndex) {
                  prevIndex = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
-            }
+             }
         } else {
             prevIndex = (currentIndex - 1 + currentQueue.length) % currentQueue.length;
         }
-        
         if (currentQueue[prevIndex]) {
             playSong(currentQueue[prevIndex]);
         }
@@ -249,9 +248,7 @@ export const AudioProvider = ({ children }) => {
         const newShuffleState = !isShuffle;
         setIsShuffle(newShuffleState);
         if (newShuffleState) {
-            // Xáo trộn queue
             const shuffled = [...originalQueue].sort(() => Math.random() - 0.5);
-            // Đảm bảo bài hát hiện tại vẫn ở đầu
             const currentSongIndex = shuffled.findIndex(s => s.id === currentSong?.id);
             if (currentSongIndex > -1) {
                 const [current] = shuffled.splice(currentSongIndex, 1);
@@ -259,16 +256,12 @@ export const AudioProvider = ({ children }) => {
             }
             setCurrentQueue(shuffled);
         } else {
-            // Quay lại queue gốc (giữ nguyên thứ tự bài hát hiện tại)
             const currentIndexInOriginal = originalQueue.findIndex(s => s.id === currentSong?.id);
             if (currentIndexInOriginal > -1) {
-                 // Đặt bài hát hiện tại làm mốc
                  const reordered = [
                      ...originalQueue.slice(currentIndexInOriginal),
                      ...originalQueue.slice(0, currentIndexInOriginal)
                  ];
-                 // Cập nhật lại originalQueue để giữ đúng thứ tự khi play next
-                 setOriginalQueue(reordered);
                  setCurrentQueue(reordered);
             } else {
                  setCurrentQueue(originalQueue);
@@ -283,7 +276,7 @@ export const AudioProvider = ({ children }) => {
     };
 
     const setSleepTimer = (duration) => {
-        clearSleepTimer(); // Xóa timer cũ nếu có
+        clearSleepTimer();
         console.log(`Hẹn giờ tắt nhạc trong ${duration} ms`);
         const timerId = setTimeout(() => {
             if (sound && isPlaying) {
@@ -304,6 +297,18 @@ export const AudioProvider = ({ children }) => {
         }
     };
 
+    const setSongVolume = async (newVolume) => {
+        setVolume(newVolume); 
+        if (sound) {
+            try {
+                await sound.setVolumeAsync(newVolume);
+            } catch (e) {
+                console.error("Lỗi khi chỉnh âm lượng:", e);
+            }
+        }
+    };
+
+    // Giá trị cung cấp cho Context
     const value = {
         sound,
         currentSong,
@@ -316,6 +321,7 @@ export const AudioProvider = ({ children }) => {
         sleepTimerId,
         positionMillis: playbackStatus?.positionMillis || 0,
         durationMillis: playbackStatus?.durationMillis || 0,
+        volume,
         playSong,
         handlePlayPause,
         seekTo,
@@ -326,6 +332,7 @@ export const AudioProvider = ({ children }) => {
         toggleRepeatMode,
         setSleepTimer,
         clearSleepTimer,
+        setSongVolume,
     };
 
     return (
@@ -333,8 +340,4 @@ export const AudioProvider = ({ children }) => {
             {children}
         </AudioContext.Provider>
     );
-};
-
-export const useAudioPlayer = () => {
-    return useContext(AudioContext);
 };

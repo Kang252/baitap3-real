@@ -1,19 +1,18 @@
 // frontend/app/(tabs)/home.js
-import React from 'react';
+import React, { useMemo } from 'react'; // Thêm useMemo
 import { View, StyleSheet, FlatList, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SongItem from '../../src/components/SongItem';
 import { useAudioPlayer } from '../../src/hooks/useAudioPlayer';
 import { getMockSongs } from '../../src/data/songs';
-// import MiniPlayer from '../../src/components/MiniPlayer'; // <-- KHÔNG CẦN IMPORT NỮA
 import { useFavorites } from '../../src/context/FavoritesContext';
 import { usePlaylists } from '../../src/context/PlaylistsContext';
+
+const allSongs = getMockSongs();
 
 export default function HomeScreen() {
     
     const { playSong } = useAudioPlayer();
-    const songs = getMockSongs();
-    
     const { favorites } = useFavorites();
     const { playlists } = usePlaylists();
 
@@ -22,27 +21,60 @@ export default function HomeScreen() {
     };
 
     const favoriteList = favorites || [];
+    
+    // --- BỔ SUNG FR-8.1: Gợi ý cho bạn (Mô phỏng) ---
+    // Lấy 5 bài hát ngẫu nhiên làm gợi ý
+    const recommendations = useMemo(() => {
+        return [...allSongs].sort(() => 0.5 - Math.random()).slice(0, 5);
+    }, [allSongs]);
+    // --- KẾT THÚC BỔ SUNG ---
+
+    // --- BỔ SUNG FR-8.2: Thịnh hành (Mô phỏng) ---
+    // Lấy các bài hát Pop làm thịnh hành
+    const trendingPop = useMemo(() => {
+        return allSongs.filter(s => s.genre?.includes('Pop')).slice(0, 5);
+    }, [allSongs]);
+    // --- KẾT THÚC BỔ SUNG ---
+
+
     const sections = [
         {
-            title: 'Mới phát hành',
-            data: songs.slice(0, 5), 
+            title: 'Mới phát hành', // Giữ lại mục này
+            data: allSongs.slice(0, 5),
             horizontal: true,
-            queue: songs,
+            queue: allSongs,
         },
+        // --- BỔ SUNG FR-8.1 ---
+        {
+            title: 'Gợi ý cho bạn',
+            data: recommendations,
+            horizontal: true,
+            queue: recommendations,
+        },
+        // --- KẾT THÚC BỔ SUNG ---
         {
             title: 'Bài hát yêu thích',
-            data: favoriteList.slice(0, 5), 
+            data: favoriteList.slice(0, 5),
             horizontal: true,
             queue: favoriteList,
         },
+        // --- BỔ SUNG FR-8.2 ---
+        {
+            title: 'Thịnh hành Pop',
+            data: trendingPop,
+            horizontal: true,
+            queue: trendingPop,
+        },
+        // --- KẾT THÚC BỔ SUNG ---
         {
             title: 'Tất cả bài hát',
-            data: songs,
-            horizontal: false,
-            queue: songs,
+            data: allSongs,
+            horizontal: false, // Danh sách dọc
+            queue: allSongs,
         },
     ];
 
+    // Render item chung
     const renderSongItem = ({ item, queue }) => (
         <SongItem 
             item={item}
@@ -51,6 +83,7 @@ export default function HomeScreen() {
         />
     );
 
+    // Render item cho danh sách ngang
     const renderHorizontalList = ({ item, queue }) => (
         <View style={styles.horizontalItemContainer}>
             <SongItem 
@@ -66,35 +99,35 @@ export default function HomeScreen() {
             <FlatList
                 data={sections}
                 keyExtractor={(item, index) => item.title + index}
-                renderItem={({ item }) => (
+                renderItem={({ item: section }) => (
                     <View style={styles.sectionContainer}>
-                        <Text style={styles.sectionTitle}>{item.title}</Text>
-                        {item.horizontal ? (
+                        <Text style={styles.sectionTitle}>{section.title}</Text>
+                        {section.horizontal ? (
                             <FlatList
-                                data={item.data}
-                                renderItem={({ item: songItem }) => renderHorizontalList({ item: songItem, queue: item.queue })}
+                                data={section.data}
+                                renderItem={({ item: songItem }) => renderHorizontalList({ item: songItem, queue: section.queue })}
                                 keyExtractor={(song) => song.id}
                                 horizontal
                                 showsHorizontalScrollIndicator={false}
+                                // Thêm padding để thấy item cuối
+                                contentContainerStyle={{ paddingHorizontal: 10 }} 
                             />
                         ) : (
+                            // Render danh sách dọc
                             <FlatList
-                                data={item.data}
-                                renderItem={({ item: songItem }) => renderSongItem({ item: songItem, queue: item.queue })}
+                                data={section.data}
+                                renderItem={({ item: songItem }) => renderSongItem({ item: songItem, queue: section.queue })}
                                 keyExtractor={(song) => song.id}
                             />
                         )}
                     </View>
                 )}
-                // Giữ lại ListFooterComponent để nội dung cuối không bị che
-                ListFooterComponent={<View style={{ height: 60 }} />} 
+                ListFooterComponent={<View style={{ height: 60 }} />} // Thêm khoảng trống cho MiniPlayer
             />
-            {/* <MiniPlayer /> */} {/* <-- XÓA DÒNG NÀY */}
         </SafeAreaView>
     );
 }
 
-// (Giữ nguyên styles)
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -107,11 +140,11 @@ const styles = StyleSheet.create({
         fontSize: 22,
         fontWeight: 'bold',
         color: 'white',
-        marginLeft: 10,
+        marginLeft: 15, // Căn lề thống nhất
         marginBottom: 10,
     },
     horizontalItemContainer: {
-        width: 150,
-        marginHorizontal: 5,
+        width: 150, // Chiều rộng cho item ngang
+        marginHorizontal: 5, // Khoảng cách giữa các item
     },
 });

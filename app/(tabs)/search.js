@@ -4,19 +4,22 @@ import { View, Text, StyleSheet, TextInput, FlatList } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getMockSongs } from '../../src/data/songs';
 import SongItem from '../../src/components/SongItem';
-import { useAudioPlayer } from '../../src/hooks/useAudioPlayer';
-// import MiniPlayer from '../../src/components/MiniPlayer'; // <-- KHÔNG CẦN IMPORT NỮA
+// --- SỬA LỖI ĐƯỜNG DẪN ---
+import { useAudioPlayer } from '../../src/hooks/useAudioPlayer'; // Đường dẫn đúng
+// --- KẾT THÚC SỬA ---
+// MiniPlayer được quản lý bởi _layout.js
 import { Ionicons } from '@expo/vector-icons';
 
 const allSongs = getMockSongs();
 
 export default function SearchScreen() {
     const [searchQuery, setSearchQuery] = useState('');
+    
     const { playSong } = useAudioPlayer();
 
     const filteredSongs = useMemo(() => {
         if (!searchQuery) {
-            return []; 
+            return []; // Không hiển thị gì khi chưa tìm kiếm
         }
         const query = searchQuery.toLowerCase();
         return allSongs.filter(
@@ -27,7 +30,8 @@ export default function SearchScreen() {
     }, [searchQuery]);
 
     const handlePlaySong = (track) => {
-        playSong(track, filteredSongs); 
+        // Phát bài hát với queue là kết quả tìm kiếm
+        playSong(track, filteredSongs.length > 0 ? filteredSongs : [track]); 
     };
 
     return (
@@ -49,7 +53,7 @@ export default function SearchScreen() {
                 renderItem={({ item }) => (
                     <SongItem
                         item={item}
-                        onPlayPress={() => handlePlaySong(item)} // Sửa: truyền item
+                        onPlayPress={() => handlePlaySong(item)}
                         queue={filteredSongs}
                     />
                 )}
@@ -57,16 +61,14 @@ export default function SearchScreen() {
                 ListEmptyComponent={() => (
                      searchQuery ? <Text style={styles.emptyText}>Không tìm thấy kết quả.</Text> : <Text style={styles.emptyText}>Bắt đầu tìm kiếm...</Text>
                 )}
-                // Giữ lại ListFooterComponent để nội dung cuối không bị che
                 ListFooterComponent={<View style={{ height: 60 }} />}
             />
             
-            {/* <MiniPlayer /> */} {/* <-- XÓA DÒNG NÀY */}
+            {/* MiniPlayer được quản lý bởi _layout.js */}
         </SafeAreaView>
     );
 }
 
-// (Giữ nguyên styles)
 const styles = StyleSheet.create({
     container: {
         flex: 1,

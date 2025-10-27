@@ -1,88 +1,115 @@
 // frontend/src/context/FavoritesContext.js
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getMockSongs } from '../data/songs'; // Import để tra cứu bài hát
 
-// 1. Tạo Context
+const FAVORITES_KEY = '@favorites_songs';
+
 export const FavoritesContext = createContext();
 
-// 2. Tạo Provider
+// Lấy danh sách bài hát đầy đủ một lần
+const allSongs = getMockSongs();
+// Tạo Map để tra cứu bài hát bằng ID nhanh hơn
+const allSongsMap = new Map(allSongs.map(song => [song.id, song]));
+
 export const FavoritesProvider = ({ children }) => {
-  const STORAGE_KEY = '@my_music_app_favorites'; // Khóa để lưu trữ
-  const [favoriteIDs, setFavoriteIDs] = useState(new Set()); // Dùng Set để tránh trùng lặp
+    // State bây giờ lưu mảng các đối tượng song đầy đủ
+    const [favorites, setFavorites] = useState([]); 
+    // State phụ lưu trữ Set các ID để kiểm tra nhanh
+    const [favoriteIds, setFavoriteIds] = useState(new Set());
 
-  // --- Logic chính ---
+    // Tải danh sách yêu thích khi khởi động
+    useEffect(() => {
+        const loadFavorites = async () => {
+            try {
+                const jsonValue = await AsyncStorage.getItem(FAVORITES_KEY);
+                // AsyncStorage có thể lưu mảng ID hoặc mảng object (chúng ta sẽ lưu object)
+                const loadedFavorites = jsonValue != null ? JSON.parse(jsonValue) : [];
+                
+                // Đảm bảo dữ liệu tải lên là đối tượng song hợp lệ
+                const validFavorites = loadedFavorites
+                    .map(fav => typeof fav === 'string' ? allSongsMap.get(fav) : fav) // Chuyển đổi ID thành object nếu cần
+                    .filter(song => song && song.id && allSongsMap.has(song.id)); // Lọc bỏ bài hát không hợp lệ/không còn tồn tại
 
-  // 1. Tải danh sách yêu thích từ AsyncStorage khi ứng dụng khởi động
-  useEffect(() => {
-    async function loadFavorites() {
-      try {
-        const storedFavorites = await AsyncStorage.getItem(STORAGE_KEY);
-        if (storedFavorites !== null) {
-          // Chuyển chuỗi JSON đã lưu thành mảng, rồi thành Set
-          setFavoriteIDs(new Set(JSON.parse(storedFavorites)));
-          console.log('Đã tải danh sách Yêu thích từ AsyncStorage');
+                setFavorites(validFavorites);
+                setFavoriteIds(new Set(validFavorites.map(song => song.id)));
+                console.log("Đã tải danh sách Yêu thích từ AsyncStorage:", validFavorites.length, "bài");
+            } catch (e) {
+                console.error("Lỗi tải danh sách Yêu thích:", e);
+            }
+        };
+        loadFavorites();
+    }, []);
+
+    // Lưu lại mỗi khi favorites thay đổi
+    useEffect(() => {
+        const saveFavorites = async () => {
+            try {
+                // Lưu mảng các đối tượng song đầy đủ
+                const jsonValue = JSON.stringify(favorites);
+                await AsyncStorage.setItem(FAVORITES_KEY, jsonValue);
+            } catch (e) {
+                console.error("Lỗi lưu danh sách Yêu thích:", e);
+            }
+        };
+        saveFavorites();
+    }, [favorites]);
+
+    // Thêm bài hát vào danh sách yêu thích
+    const addFavorite = (song) => {
+        if (!song || !song.id) {
+            console.warn("addFavorite: Bài hát không hợp lệ.");
+            return;
         }
-      } catch (error) {
-        console.error('Lỗi khi tải Yêu thích:', error);
-      }
-    }
-    loadFavorites();
-  }, []);
+        // Kiểm tra xem bài hát đã tồn tại chưa bằng Set
+        if (!favoriteIds.has(song.id)) {
+            console.log("Adding favorite:", song.title);
+            // Cập nhật state mảng object
+            setFavorites(prevFavorites => [...prevFavorites, song]);
+            // Cập nhật state Set ID
+            setFavoriteIds(prevIds => new Set(prevIds).add(song.id));
+        } else {
+             console.log("Bài hát đã có trong yêu thích:", song.title);
+        }
+    };
 
-  // 2. Hàm trợ giúp để lưu thay đổi vào AsyncStorage
-  const saveFavorites = async (ids) => {
-    try {
-      // Chuyển Set thành mảng, rồi thành chuỗi JSON để lưu
-      const jsonValue = JSON.stringify(Array.from(ids));
-      await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
-    } catch (error) {
-      console.error('Lỗi khi lưu Yêu thích:', error);
-    }
-  };
+    // Xóa bài hát khỏi danh sách yêu thích
+    const removeFavorite = (songId) => {
+         if (!songId) {
+             console.warn("removeFavorite: ID bài hát không hợp lệ.");
+             return;
+         }
+        console.log("Removing favorite:", songId);
+        // Cập nhật state mảng object
+        setFavorites(prevFavorites => prevFavorites.filter(song => song.id !== songId));
+        // Cập nhật state Set ID
+        setFavoriteIds(prevIds => {
+            const newIds = new Set(prevIds);
+            newIds.delete(songId);
+            return newIds;
+        });
+    };
 
-  // 3. (FR-3.1) Thêm một bài hát vào Yêu thích
-  const addFavorite = (songId) => {
-    const newFavoriteIDs = new Set(favoriteIDs); // Sao chép Set
-    newFavoriteIDs.add(songId); // Thêm ID mới
-    setFavoriteIDs(newFavoriteIDs); // Cập nhật state
-    saveFavorites(newFavoriteIDs); // Lưu vào AsyncStorage
-    console.log('Đã thêm Yêu thích:', songId);
-  };
+    // Kiểm tra xem bài hát có trong danh sách yêu thích không
+    const isFavorite = (songId) => {
+        return favoriteIds.has(songId);
+    };
 
-  // 4. (FR-3.1) Xóa một bài hát khỏi Yêu thích
-  const removeFavorite = (songId) => {
-    const newFavoriteIDs = new Set(favoriteIDs);
-    newFavoriteIDs.delete(songId); // Xóa ID
-    setFavoriteIDs(newFavoriteIDs);
-    saveFavorites(newFavoriteIDs);
-    console.log('Đã xóa Yêu thích:', songId);
-  };
+    const value = {
+        favorites, // Cung cấp mảng các object song
+        addFavorite,
+        removeFavorite,
+        isFavorite,
+    };
 
-  // 5. Hàm kiểm tra xem một bài hát có đang được Yêu thích không
-  const isFavorite = (songId) => {
-    return favoriteIDs.has(songId);
-  };
-
-  // Cung cấp các hàm và state cho toàn ứng dụng
-  const value = {
-    favoriteIDs,
-    addFavorite,
-    removeFavorite,
-    isFavorite,
-  };
-
-  return (
-    <FavoritesContext.Provider value={value}>
-      {children}
-    </FavoritesContext.Provider>
-  );
+    return (
+        <FavoritesContext.Provider value={value}>
+            {children}
+        </FavoritesContext.Provider>
+    );
 };
 
-// 6. Tạo Hook tiện ích
+// Hook tùy chỉnh
 export const useFavorites = () => {
-  const context = useContext(FavoritesContext);
-  if (context === undefined) {
-    throw new Error('useFavorites phải được dùng bên trong FavoritesProvider');
-  }
-  return context;
+    return useContext(FavoritesContext);
 };

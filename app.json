@@ -1,3 +1,4 @@
+// frontend/app.json
 {
   "expo": {
     "name": "frontend",
@@ -5,11 +6,22 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
-    // "newArchEnabled": false, // <-- XÓA HOẶC COMMENT LẠI DÒNG NÀY
+    "scheme": "myapp",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121212"
+    },
+    // --- SỬA LỖI TẠI ĐÂY ---
+    "assets": [
+      "./assets/images",
+      "./assets/audio" 
+    ],
+    // --- KẾT THÚC SỬA ---
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.frontend",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -18,48 +30,35 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.FOREGROUND_SERVICE",
         "android.permission.WAKE_LOCK"
-      ]
+      ],
+      "package": "com.anonymous.frontend"
     },
     "web": {
+      "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
-          "dark": {
-            "backgroundColor": "#000000"
-          }
-        }
-      ],
-      // ĐẢM BẢO CHỈ CÓ PLUGIN NÀY CHO AUDIO
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
-        }
-      ]
-      // KHÔNG CÓ "expo-audio" ở đây
+      "expo-font"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
-    }
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "1c7a40ca-22e0-4180-8777-6f8e7054a86f"
+      }
+    },
+    "owner": "kang252"
   }
 }
